@@ -94,7 +94,7 @@ class Linkshare:
             transaction = {
                     'id': t[headers.index('Order ID')],
                     'saleAmount': {'amount':float(t[headers.index('Gross Sales')].replace(',','')), 'currency':t[headers.index('Currency')]},
-                    'commissionAmount': {'amount':t[headers.index('Gross Commissions')], 'currency':t[headers.index('Currency')]},
+                    'commissionAmount': {'amount':t[headers.index('Gross Commissions')].replace(',',''), 'currency':t[headers.index('Currency')]},
                     'publisherId': t[headers.index('Publisher ID')],
                     'voucherCode': '',
                     'customerCountry': country,

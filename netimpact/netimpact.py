@@ -15,9 +15,9 @@ logging.basicConfig(level=os.environ.get("LOGLEVEL", "INFO"))
 @click.option('--partners', '-p', is_flag=True, default=False, help='get and upload new partners?')
 @click.option('--transactions', '-t', is_flag=True, default=False, help='get and upload transactions?')
 @click.option('--groups', '-g', is_flag=True, default=False, help='refresh group list?')
-@click.option('--test', is_flag=True, default=False, help='If flag is included then transactions will be pulled from the listed networks and put in the transactions folder locally instead of uploaded to Impact.')
+@click.option('--upload', is_flag=True, default=True, help='If flag is included then transactions will be pulled from the listed networks and put in the transactions folder locally instead of uploaded to Impact.')
 @click.command()
-def cli(networks,config,partners,transactions,groups,test):
+def cli(networks,config,partners,transactions,groups,upload):
     """Default CLI method to get new partners and transactions from the
     provided NETWORKS and create them in the Impact program.
 
@@ -58,4 +58,4 @@ def cli(networks,config,partners,transactions,groups,test):
             if partners:
                 i.new_publisher_validation(account_id, account_name, n)
             if transactions:
-                i.transactions_update(account_id, account_name, n, test)
+                i.transactions_update(account_id, account_name, n, upload)

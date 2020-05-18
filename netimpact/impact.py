@@ -484,7 +484,7 @@ class Impact:
             csvwriter.writerows(t_list)
         return end
 
-    def transactions_update(self, account_id, account_name, network, test=False):
+    def transactions_update(self, account_id, account_name, network, upload):
         """Orchestration function for the ETL pipeline. Runs required functions then uploads to the Impact batch conversion/modification FTP server for the account
 
         Arguments:
@@ -506,7 +506,7 @@ class Impact:
         file_path_p = Path(f'transactions/{end}/{account_name}_{end}_pending.csv')
         file_path_m = Path(f'transactions/{end}/{account_name}_{end}_mods.csv')
 
-        if not test:
+        if upload:
                 try:
                     with ftplib.FTP('batch.impactradius.com', self.ftp_un, self.ftp_p) as ftp, open(file_path_p, 'rb') as file:
                         ftp.storbinary(f'STOR {file_path_p.name}', file)                
