@@ -74,7 +74,6 @@ class Impact:
                                 'Linkshare': '17261',
                                 'Admitad': '17262'}
 
-
     def create_group(self, group_name):
         """Creates new partner group
 
@@ -143,7 +142,6 @@ class Impact:
             params['Website'] = 'http://' + pub['site']
         headers = {'Content-Type': 'application/x-www-form-urlencoded', 'Accept':'application/json'}
         return requests.post(url, params=params, headers=headers)
-
 
     def get_groups(self):
         """Pull the list of groups on the program and creates a dict for easy lookup
@@ -525,6 +523,72 @@ class Impact:
 
                 except ftplib.error_perm as e:
                     logging.error(f"FTP Upload error for {file_path_m}. Re-upload this file in a few minutes.")
+
+    def get_all_transactions(self, acct, start=None, end=None, timeRange=None, status='pending'):
+        transactions = [] # Replace this with whatever network call needs to happen to get a pub list
+        url = f'{self.adv_api_stem}Reports/adv_action_listing.json'
+    
+        if status == 'pending':
+            st = 'PENDING'
+        elif status == 'approved':
+            st = 'APPROVED'
+        elif status == 'declined':
+            st = 'REVERSED'
+        else:
+            st = 'PENDING'
+
+        params ={
+            'compareEnabled':'false',
+            'SUPERSTATUS_MS':st,
+            'SUBAID':{self.program_id},
+        }
+
+        if start:
+            params['START_DATE']=start,
+            params['END_DATE']=end,
+            params['timeRange']='CUSTOM'
+        elif timeRange:
+            params['timeRange']=timeRange,
+        
+
+        headers = {'Content-Type': 'application/x-www-form-urlencoded', 'Accept':'application/json'}
+
+        while True:
+            r = requests.get(url, headers=headers, params=params)
+            while r.status_code == 429:
+                time.sleep(30)
+                r = requests.get(url, headers=headers)
+            while r.status_code == 520:
+                time.sleep(30)
+                r = requests.get(url, headers=headers)
+            rj = r.json()
+
+            printProgressBar(int(rj['@page']), int(rj['@numpages']), prefix = f'Page {int(rj["@page"])}/{int(rj["@numpages"])}:', suffix = 'Complete', length = 50)
+            time.sleep(2)
+            for t in r.json()['Records']:
+                transaction = {
+                    'transactionDate': t['Action_Date'],
+                    'id': t['OID'],
+                    'saleAmount': {'amount':t['Sale_Amount'], 'currency':t['Original_Currency']},
+                    'commissionAmount': {'amount':t['Payout'], 'currency':t['Original_Currency']},
+                    'publisherId': t['MP_Id'],
+                    'status': t['Customer_Status'],
+                    'voucherCode': t['PromoCode'],
+                    'customerCountry': t['CustomerCountry'],
+                    'advertiserCountry': t['CustomerCountry']
+                }
+                if 'Mobile' in t['Action_Tracker']:
+                    transaction['device'] = 'Mobile'
+                else:
+                    transaction['device'] = 'Desktop'
+                transactions.append(transaction)
+            if rj['@page'] != rj['@numpages']:
+                url = self.root_adv_api + rj['@nextpageuri']
+            else:
+                break
+
+        return transactions
+
 
 # Helper functions
 def pretty_print_POST(req):
