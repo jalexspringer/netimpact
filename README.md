@@ -1,4 +1,8 @@
-# Netimpact - a network data importer for Impact Partnership Cloud
+# Netimpact - an affiliate network data importer for Impact Partnership Cloud and general network data access
+
+## Install
+
+    pip install netimpact
 
 ## Docker Instructions
 Build the image with the config.toml file in the folder:
