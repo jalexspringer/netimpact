@@ -101,6 +101,8 @@ class Admitad:
             st = 0
         conn = http.client.HTTPSConnection("api.admitad.com")
         payload = ''
+
+        
         conn.request("GET", f"/advertiser/{acct}/statistics/actions/?start_date={start}&end_date={end}&status={st}&limit=5000", payload, self.headers)
         res = conn.getresponse()
         data = res.read()
