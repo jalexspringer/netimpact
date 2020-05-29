@@ -32,6 +32,29 @@ class AWin:
             p['site'] = 'https://www.awinpub.com'
         return pub_list
 
+    def transaction_request(self, acct, start, end, status):
+        """GET all transactions over the given time period with a given status and transform
+        the transactions into dictionaries consumable by the Impact transaction upload object
+
+        Arguments:
+            acct {string} -- Awin account ID
+            start {datetime} -- Datetime object for the beginning of the transaction time period
+            end {datetime} -- Datetime object for the end of the transaction time period
+            status {string} -- Status of the transactions to be pulled - one of [pending, approved, declined]. Defaults to pending if incorrect input is given.
+
+
+        Returns:
+            list -- List of dictionaries containing transaction data
+        """
+        url = f"https://api.awin.com/advertisers/{acct}/transactions/?startDate={start}T00%3A00%3A00&endDate={end}T23%3A59%3A59&timezone=GMT&accessToken={self.token}&status={status}"
+        if status == 'approved' or status == 'declined':
+            url += '&dateType=validation'
+        r = requests.get(url)
+        while r.status_code == 429:
+            time.sleep(60)
+            r = requests.get(url)
+        return r.json()
+
     def get_all_transactions(self, acct, start, end, status):
         """GET all transactions over the given time period with a given status and transform
         the transactions into dictionaries consumable by the Impact transaction upload object
@@ -47,14 +70,8 @@ class AWin:
         Returns:
             list -- List of dictionaries containing transaction data
         """     
-        url = f"https://api.awin.com/advertisers/{acct}/transactions/?startDate={start}T00%3A00%3A00&endDate={end}T23%3A59%3A59&timezone=GMT&accessToken={self.token}&status={status}"
-        if status == 'approved' or status == 'declined':
-            url += '&dateType=validation'
-        r = requests.get(url)
-        while r.status_code == 429:
-            time.sleep(60)
-            r = requests.get(url)
-        transaction_list = r.json()
+
+        transaction_list = self.transaction_request(acct, start, end, status)
         for t in transaction_list:
             if status == 'pending':
                 try:
