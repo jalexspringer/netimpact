@@ -44,7 +44,7 @@ class AWin:
 
 
         Returns:
-            list -- List of dictionaries containing transaction data
+            dict -- Dictionary containing transaction data
         """
         url = f"https://api.awin.com/advertisers/{acct}/transactions/?startDate={start}T00%3A00%3A00&endDate={end}T23%3A59%3A59&timezone=GMT&accessToken={self.token}&status={status}"
         if status == 'approved' or status == 'declined':
