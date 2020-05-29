@@ -77,10 +77,10 @@ class Admitad:
             pub_list.append(pub)
         return pub_list
 
-    def get_all_transactions(self, acct, start, end, status):
+
+    def transaction_request(self, acct, start, end, status):
         """GET all transactions over the given time period with a given status and transform
         the transactions into dictionaries consumable by the Impact transaction upload object
-        TODO :: Add flexibility for the identifier of new vs returning and device type
 
         Arguments:
             acct {string} -- Admitad account ID
@@ -88,9 +88,10 @@ class Admitad:
             end {datetime} -- Datetime object for the end of the transaction time period
             status {string} -- Status of the transactions to be pulled - one of [pending, approved, declined]. Defaults to pending if incorrect input is given.
 
+
         Returns:
-            list -- List of dictionaries containing transaction data
-        """        
+            dict -- Dictionary containing transaction data
+        """
         if status == 'pending':
             st = 0
         elif status == 'approved':
@@ -106,7 +107,23 @@ class Admitad:
         conn.request("GET", f"/advertiser/{acct}/statistics/actions/?start_date={start}&end_date={end}&status={st}&limit=5000", payload, self.headers)
         res = conn.getresponse()
         data = res.read()
-        transactions = json.loads(data.decode("utf-8"))['results']
+        return json.loads(data.decode("utf-8"))['results']
+
+    def get_all_transactions(self, acct, start, end, status):
+        """GET all transactions over the given time period with a given status and transform
+        the transactions into dictionaries consumable by the Impact transaction upload object
+        TODO :: Add flexibility for the identifier of new vs returning and device type
+
+        Arguments:
+            acct {string} -- Admitad account ID
+            start {datetime} -- Datetime object for the beginning of the transaction time period
+            end {datetime} -- Datetime object for the end of the transaction time period
+            status {string} -- Status of the transactions to be pulled - one of [pending, approved, declined]. Defaults to pending if incorrect input is given.
+
+        Returns:
+            list -- List of dictionaries containing transaction data
+        """        
+        transactions = self.transaction_request(acct,start,end,status)
         transaction_list = []
         for t in transactions:
             try:
