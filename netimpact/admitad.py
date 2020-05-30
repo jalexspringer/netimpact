@@ -162,5 +162,5 @@ class Admitad:
             pass
         else:
             start = (target_date - timedelta(1)).strftime(self.date_format)
-        end = (target_date).strftime(self.date_format)
+        end = target_date.strftime(self.date_format)
         return start, end

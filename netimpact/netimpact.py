@@ -7,6 +7,10 @@ from netimpact.linkshare import Linkshare
 from netimpact.impact import Impact #, Clicker
 import click
 import toml
+import boto3
+from s3fs import S3FileSystem
+import pandas as pd
+
 import logging,os,time
 from datetime import datetime, timedelta, date
 logging.basicConfig(level=os.environ.get("LOGLEVEL", "INFO"))
@@ -17,10 +21,11 @@ logging.basicConfig(level=os.environ.get("LOGLEVEL", "INFO"))
 @click.option('--transactions', '-t', is_flag=True, default=False, help='get and upload transactions?')
 @click.option('--groups', '-g', is_flag=True, default=False, help='refresh group list?')
 @click.option('--no_upload', is_flag=True, default=False, help='If flag is included then transactions will be pulled from the listed networks and put in the transactions folder locally instead of uploaded to Impact.')
+@click.option('--s3_upload', '-s', default=False, help='Name of the S3 bucket to upload data to. References ~/.aws/credentials')
 @click.option('--target_date', '-d', type=click.DateTime(formats=["%Y-%m-%d"]),
               default=str(date.today()-timedelta(1)), help='Transactions from what day? Format: %Y-%m-%d')
 @click.command()
-def cli(networks,config,partners,transactions,groups,no_upload,target_date):
+def cli(networks,config,partners,transactions,groups,no_upload,s3_upload,target_date):
     """Default CLI method to get new partners and transactions from the
     provided NETWORKS and create them in the Impact program.
 
@@ -66,3 +71,14 @@ def cli(networks,config,partners,transactions,groups,no_upload,target_date):
                     pass
                 else:
                     i.batch_to_impact(file_path_m, file_path_p)
+                if s3_upload:
+                    s3 = boto3.resource('s3')
+                    df = pd.read_csv(file_path_p)
+                    pq_file = f'{str(file_path_p).rstrip(".csv")}.parquet'
+                    df.to_parquet(pq_file)
+                    s3.Object(c['S3']['bucket'], pq_file).put(Body=open(pq_file, 'rb'))
+                    s3.Object(c['S3']['bucket'], str(file_path_m)).put(Body=open(str(file_path_m), 'rb'))
+
+                    print(pq_file)
+                    print(str(file_path_m))
+                    print(s3_upload)

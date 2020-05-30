@@ -17,7 +17,7 @@ def new_transaction_lists(impact, t_lists, account_name, network_name):
     Returns:
         tuple -- (list of Impact conversions upload headers, list of amended transaction dicts)
     """
-    headrow = ["CampaignId","ActionTrackerId","EventDate","OrderId","MediaPartnerId",'CustomerStatus',"CurrencyCode","Amount","Category","Sku","Quantity",'Text1','PromoCode','Country','OrderLocation','Text2','Date1','Note','Numeric1']
+    headrow = ["CampaignId","ActionTrackerId","EventDate","OrderId","MediaPartnerId",'CustomerStatus',"CurrencyCode","Amount","Category","Sku","Quantity",'Text1','PromoCode','Country','OrderLocation','Text2','Date1','Note','Numeric1','OrderStatus','VoucherCode']
     t_list = []
     for l in t_lists:
         for t in l:
@@ -42,8 +42,6 @@ def new_transaction_lists(impact, t_lists, account_name, network_name):
             transaction = [
                 impact.program_id,
                 at_id,
-                # '2020-05-03T23:59:59',
-                # 'NOW',
                 t['transactionDate'],
                 t['id'],
                 mpid,
@@ -61,7 +59,9 @@ def new_transaction_lists(impact, t_lists, account_name, network_name):
                 t['advertiserCountry'],
                 t['transactionDate'],
                 account_name,
-                commission_rate
+                commission_rate,
+                'pending',
+                t['voucherCode']
                 ]
             t_list.append(transaction)  
     return headrow, t_list
@@ -106,7 +106,7 @@ def modified_transaction_lists(impact, approved, declined):
 
     return headrow, t_list
 
-def prepare_transactions(impact, account_id, network, date):
+def prepare_transactions(impact, account_id, network, target_date):
     """Extract transactions from the network object methods (date formats are specific to each network) and pass them to the transformation functions
     TODO :: move the date formatting to the network objects
     TODO :: historical data functions
@@ -124,7 +124,7 @@ def prepare_transactions(impact, account_id, network, date):
     pending = []
     declined = []
     logging.info(f'Getting {network.network_name} transactions and modifications for account {account_id}')
-    start,end = network.date_formatter(date)
+    start,end = network.date_formatter(target_date)
 
     if network.network_name == 'Linkshare':
         approved, pending, declined = network.get_all_transactions(account_id, start, end)
@@ -135,9 +135,9 @@ def prepare_transactions(impact, account_id, network, date):
         declined = network.get_all_transactions(account_id, start, end, 'declined')
         pending = network.get_all_transactions(account_id, start, end, 'pending')
 
-    return approved, declined, pending, end.strftime('%Y-%m-%d')
+    return approved, declined, pending, target_date
 
-def transactions_process(impact, account_id, account_name, network, date):
+def transactions_process(impact, account_id, account_name, network, target_date):
     """Main function running the extract and transform process for the network transaction data. Writes the results to CSV ready for upload.
 
     Arguments:
@@ -153,15 +153,19 @@ def transactions_process(impact, account_id, account_name, network, date):
         file_path_p {string} -- path to the pending transactions file 
 
     """        
-    approved, declined, pending, end = prepare_transactions(impact, account_id, network, date)
+    approved, declined, pending, end = prepare_transactions(impact, account_id, network, target_date)
+    pending_folders = f'transactions/{end.year}/{end:%m}/{end:%d}/{account_name.replace(" ","_")}'
+    mod_folders = f'modifications/{end.year}/{end:%m}/{end:%d}/{account_name.replace(" ","_")}'
+
     try:
-        os.makedirs(f'transactions/{account_name.replace(" ","_")}/{end}')
-        os.makedirs(f'modifications/{account_name.replace(" ","_")}/{end}')
+        os.makedirs(pending_folders)
+        os.makedirs(mod_folders)
 
     except OSError as e:
         pass
-    file_path_p = Path(f'transactions/{account_name.replace(" ","_")}/{end}/pending_{account_name.replace(" ","_")}_{end}.csv')
-    file_path_m = Path(f'modifications/{account_name.replace(" ","_")}/{end}/mods_{account_name.replace(" ","_")}_{end}.csv')
+
+    file_path_p = Path(f'{pending_folders}/{account_name.replace(" ","_")}_{end:%Y-%m-%d}.csv')
+    file_path_m = Path(f'{mod_folders}/{account_name.replace(" ","_")}_{end:%Y-%m-%d}.csv')
 
     logging.info(f'Approved transactions {len(approved)}')
     logging.info(f'New pending transactions {len(pending)}')
