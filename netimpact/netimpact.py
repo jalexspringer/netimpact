@@ -74,7 +74,7 @@ def cli(networks,config,partners,transactions,groups,no_upload,s3_upload,target_
                 if s3_upload:
                     session = boto3.Session(
                         aws_access_key_id=c['S3']['access_key'],
-                        aws_secret_access_key==c['S3']['secret_access_key'],
+                        aws_secret_access_key=c['S3']['secret_access_key'],
                     )
                     s3 = boto3.resource('s3')
                     df = pd.read_csv(file_path_p)
