@@ -29,7 +29,7 @@ def cli(networks,config,partners,transactions,groups,no_upload,s3_upload,target_
     """Default CLI method to get new partners and transactions from the
     provided NETWORKS and create them in the Impact program.
 
-    NETWORKS is the comma seperated list of networks to operate on (currently accepts awin,linkshare,admitad)
+    NETWORKS is the comma separated list of networks to operate on (currently accepts awin,linkshare,admitad)
     """
     c = toml.load(config)
     logging.info(f'Starting import process for {networks}')
@@ -81,5 +81,7 @@ def cli(networks,config,partners,transactions,groups,no_upload,s3_upload,target_
                     pq_file = f'{str(file_path_p).rstrip(".csv")}.parquet'
                     df.to_parquet(pq_file)
                     s3.Object(c['S3']['bucket'], pq_file).put(Body=open(pq_file, 'rb'))
+                    s3.Object(c['S3']['bucket'], str(file_path_m)).put(Body=open(str(file_path_m), 'rb'))
+                    
                     s3.Object(c['S3']['bucket'], str(file_path_m)).put(Body=open(str(file_path_m), 'rb'))
                     logging.info("Files uploaded to {(c['S3']['bucket']}")
