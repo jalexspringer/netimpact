@@ -4,6 +4,7 @@ import mimetypes
 import json
 from urllib.parse import urlencode
 from base64 import b64encode
+from datetime import timedelta
 
 class Admitad:
     """Admitad object for interacting with the Admitad advertiser API
@@ -16,6 +17,8 @@ class Admitad:
         token {str} -- If provided this string is used instead of generating a new token (default: {False})
     """    
     network_name = 'Admitad'
+    date_format = '%d.%m.%Y'
+
     def __init__(self, client_id, client_secret, token=False):    
         super().__init__()
         self.client_id = client_id
@@ -151,6 +154,13 @@ class Admitad:
                     transaction['device'] = 'Desktop'
                 transaction_list.append(transaction)
             except TypeError as e:
-                print(t)
                 transaction['device'] = 'Desktop'
         return transaction_list
+
+    def date_formatter(self, target_date, target_start_date=False):
+        if target_start_date:
+            pass
+        else:
+            start = (target_date - timedelta(1)).strftime(self.date_format)
+        end = (target_date).strftime(self.date_format)
+        return start, end

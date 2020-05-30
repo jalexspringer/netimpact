@@ -2,8 +2,111 @@ import logging
 import os
 import csv
 from datetime import datetime, timedelta
+from pathlib import Path
 
-def prepare_transactions(account_id, network, time_period='yesterday', start=None, end=None):
+def new_transaction_lists(impact, t_lists, account_name, network_name):
+    """Transforms new transaction records by adding the Impact tracker ID for the environment (desktop/mobile),
+        finding the correct Impact partner  ID from the network publisher ID, and determining the commission rate.
+        See README for contract payout groups requirements for correct payments.
+
+    Arguments:
+        new_transactions {list} -- list of transaction dicts. See below for required key value pairs in the dictionary
+        account_name {string} -- Network program/account name
+        network_name {string} -- Network name
+
+    Returns:
+        tuple -- (list of Impact conversions upload headers, list of amended transaction dicts)
+    """
+    headrow = ["CampaignId","ActionTrackerId","EventDate","OrderId","MediaPartnerId",'CustomerStatus',"CurrencyCode","Amount","Category","Sku","Quantity",'Text1','PromoCode','Country','OrderLocation','Text2','Date1','Note','Numeric1']
+    t_list = []
+    for l in t_lists:
+        for t in l:
+            try:
+                mpid = impact.existing_partner_dict[t['publisherId']]
+            except KeyError as e:
+                try:
+                    mpid = impact.existing_partner_dict[str(t['publisherId'])]
+                except KeyError as e:
+                    logging.warning(f'No valid partner {t["publisherId"]} found for {network_name} transaction {t["id"]}')
+                    # mpid = 'NOMPID'
+                    continue
+            try:
+                commission_rate = int(round(float(t['commissionAmount']['amount']) / float(t['saleAmount']['amount']), 2) * 100)
+            except ZeroDivisionError as e:
+                commission_rate = 0
+            if t['device'] == 'Desktop':
+                at_id = impact.desktop_action_tracker_id
+            elif t['device'] == 'Mobile':
+                at_id = impact.mobile_action_tracker_id
+
+            transaction = [
+                impact.program_id,
+                at_id,
+                # '2020-05-03T23:59:59',
+                # 'NOW',
+                t['transactionDate'],
+                t['id'],
+                mpid,
+                t['status'],
+                t['saleAmount']['currency'],
+                t['saleAmount']['amount'],
+                'cat',
+                'sku',
+                1,
+                account_name,
+                account_name,
+                # t['voucherCode'],
+                t['customerCountry'],
+                t['customerCountry'],
+                t['advertiserCountry'],
+                t['transactionDate'],
+                account_name,
+                commission_rate
+                ]
+            t_list.append(transaction)  
+    return headrow, t_list
+
+def modified_transaction_lists(impact, approved, declined):
+    """Transforms modified transaction records by adding the Impact tracker ID for the environment (desktop/mobile) and the Reason Code for the modification.
+    Updates the amount in the case of an approval and zeroes the amount in the case of a reversal.
+
+    Arguments:
+        approved {list} -- List of approved transactions (dictionaries)
+        declined {list} -- List of declined/reversed transactions (dictionaries)
+
+    Returns:
+        tuple -- Two items, the Impact modification file standard headers, and the amended list of transactions to be modifed
+    """        
+    headrow = ['ActionTrackerID','Oid','Amount','Reason']
+    t_list = []
+    for t in approved:
+        if t['device'] == 'Desktop':
+            at_id = impact.desktop_action_tracker_id
+        elif t['device'] == 'Mobile':
+            at_id = impact.mobile_action_tracker_id
+        transaction = [
+            at_id,
+            t['id'],
+            t['saleAmount']['amount'],
+            'VALIDATED_ORDER'
+            ]
+        t_list.append(transaction)
+    for t in declined:
+        if t['device'] == 'Desktop':
+            at_id = impact.desktop_action_tracker_id
+        elif t['device'] == 'Mobile':
+            at_id = impact.mobile_action_tracker_id
+        transaction = [
+            at_id,
+            t['id'],
+            0,
+            'RETURNED'
+            ]
+        t_list.append(transaction)
+
+    return headrow, t_list
+
+def prepare_transactions(impact, account_id, network, date):
     """Extract transactions from the network object methods (date formats are specific to each network) and pass them to the transformation functions
     TODO :: move the date formatting to the network objects
     TODO :: historical data functions
@@ -11,8 +114,8 @@ def prepare_transactions(account_id, network, time_period='yesterday', start=Non
     Arguments:
         account_id {string} -- Network specific authentication token to get publisher list
         network {object} -- Network object (currently one of AWin, Admitad, Linkshare)
-    Keyword Arguments: 
-        time_period {string} -- One of ['yesterday'] (default: {False})
+    Keyword Arguments:
+        historical {bool} -- Not currently implemented (default: {False})
 
     Returns:
         tuple -- (list of approved transactions, list of declined, list of pending, end datetime object) (all amended to fit Impact formatting requirements)
@@ -21,24 +124,7 @@ def prepare_transactions(account_id, network, time_period='yesterday', start=Non
     pending = []
     declined = []
     logging.info(f'Getting {network.network_name} transactions and modifications for account {account_id}')
-
-    if time_period == 'yesterday':
-        delta = 1
-    else:
-        delta = 0
-
-    if network.network_name == 'Awin':
-        date_format = '%Y-%m-%d'
-        start = (datetime.now() - timedelta(delta)).strftime(date_format)
-        end = (datetime.now() - timedelta(delta)).strftime(date_format)
-    elif network.network_name == 'Linkshare':
-        date_format = '%Y-%m-%d'
-        start = (datetime.now() - timedelta(delta - 1)).strftime(date_format)
-        end = (datetime.now() - timedelta(delta)).strftime(date_format)
-    elif network.network_name == 'Admitad':
-        date_format = '%d.%m.%Y'
-        start = (datetime.now() - timedelta(delta - 1)).strftime(date_format)
-        end = (datetime.now() - timedelta(delta)).strftime(date_format)
+    start,end = network.date_formatter(date)
 
     if network.network_name == 'Linkshare':
         approved, pending, declined = network.get_all_transactions(account_id, start, end)
@@ -49,14 +135,13 @@ def prepare_transactions(account_id, network, time_period='yesterday', start=Non
         declined = network.get_all_transactions(account_id, start, end, 'declined')
         pending = network.get_all_transactions(account_id, start, end, 'pending')
 
-    return approved, declined, pending, (datetime.now() - timedelta(delta)).strftime('%Y-%m-%d')
+    return approved, declined, pending, end.strftime('%Y-%m-%d')
 
-
-def transactions_process(account_id, account_name, network, historical=False):
+def transactions_process(impact, account_id, account_name, network, date):
     """Main function running the extract and transform process for the network transaction data. Writes the results to CSV ready for upload.
 
     Arguments:
-        account_id {string} -- Impact account ID
+        account_id {string} -- Network account ID
         account_name {string} -- Network program/account name
         network {object} -- Network object (currently one of AWin, Admitad, Linkshare)
 
@@ -64,26 +149,34 @@ def transactions_process(account_id, account_name, network, historical=False):
         historical {bool} -- Not implemented (default: {False})
 
     Returns:
-        datetime -- End date
+        file_path_m {string} -- path to the modifications file 
+        file_path_p {string} -- path to the pending transactions file 
+
     """        
-    approved, declined, pending, end = self.prepare_transactions(account_id, network, historical)
+    approved, declined, pending, end = prepare_transactions(impact, account_id, network, date)
     try:
-        os.makedirs(f'transactions/{end}')
+        os.makedirs(f'transactions/{account_name.replace(" ","_")}/{end}')
+        os.makedirs(f'modifications/{account_name.replace(" ","_")}/{end}')
+
     except OSError as e:
         pass
+    file_path_p = Path(f'transactions/{account_name.replace(" ","_")}/{end}/pending_{account_name.replace(" ","_")}_{end}.csv')
+    file_path_m = Path(f'modifications/{account_name.replace(" ","_")}/{end}/mods_{account_name.replace(" ","_")}_{end}.csv')
+
     logging.info(f'Approved transactions {len(approved)}')
     logging.info(f'New pending transactions {len(pending)}')
     logging.info(f'Declined transactions {len(declined)}')
 
-    headrow, t_list = self.new_transaction_lists(pending, account_name, network.network_name)
-    with open(f'transactions/{end}/{account_name}_{end}_pending.csv' , 'w', newline="") as f:
+    headrow, t_list = new_transaction_lists(impact, [approved, declined, pending], account_name, network.network_name)
+    with open(file_path_p , 'w', newline="") as f:
         csvwriter = csv.writer(f, delimiter = ',')
         csvwriter.writerow(headrow)
         csvwriter.writerows(t_list)
 
-    headrow, t_list = self.modified_transaction_lists(approved, declined)
-    with open(f'transactions/{end}/{account_name}_{end}_mods.csv' , 'w', newline="") as f:
+    headrow, t_list = modified_transaction_lists(impact, approved, declined)
+    with open(file_path_m , 'w', newline="") as f:
         csvwriter = csv.writer(f, delimiter = ',')
         csvwriter.writerow(headrow)
         csvwriter.writerows(t_list)
-    return end
+
+    return file_path_m, file_path_p

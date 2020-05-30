@@ -2,6 +2,7 @@
 import requests
 import logging
 import time
+from datetime import timedelta, datetime
 
 class AWin:
     """AWin object for interacting with the AWin advertiser API
@@ -10,6 +11,8 @@ class AWin:
         token {string} -- AWin API auth token
     """    
     network_name = 'Awin'
+    date_format = '%Y-%m-%d'
+
     def __init__(self, token):    
         self.token = token
 
@@ -92,3 +95,12 @@ class AWin:
 
     def get_agg_transactions(self, acct, start, end):
         url = f"https://api.awin.com/advertisers/{acct}/reports/publisher?startDate={start}&endDate={end}&timezone=GMT&accessToken={self.token}"
+
+
+    def date_formatter(self, target_date, target_start_date=False):
+        if target_start_date:
+            pass
+        else:
+            start = (target_date).strftime(self.date_format)
+        end = (target_date).strftime(self.date_format)
+        return start, end

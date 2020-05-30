@@ -289,242 +289,41 @@ class Impact:
             self.existing_partner_dict = self.get_partners()
             self.partner_update(account_name, network.network_name, network_pubs)
 
-    def new_transaction_lists(self, new_transactions, account_name, network_name):
-        """Transforms new transaction records by adding the Impact tracker ID for the environment (desktop/mobile),
-         finding the correct Impact partner  ID from the network publisher ID, and determining the commission rate.
-         See README for contract payout groups requirements for correct payments.
 
-        Arguments:
-            new_transactions {list} -- list of transaction dicts. See below for required key value pairs in the dictionary
-            account_name {string} -- Network program/account name
-            network_name {string} -- Network name
-
-        Returns:
-            tuple -- (list of Impact conversions upload headers, list of amended transaction dicts)
-        """
-        headrow = ["CampaignId","ActionTrackerId","EventDate","OrderId","MediaPartnerId",'CustomerStatus',"CurrencyCode","Amount","Category","Sku","Quantity",'Text1','PromoCode','Country','OrderLocation','Text2','Date1','Note','Numeric1']
-        t_list = []
-        for t in new_transactions:
-            try:
-                mpid = self.existing_partner_dict[t['publisherId']]
-            except KeyError as e:
-                try:
-                    mpid = self.existing_partner_dict[str(t['publisherId'])]
-                except KeyError as e:
-                    logging.warning(f'No valid partner {t["publisherId"]} found for {network_name} transaction {t["id"]}')
-                    # mpid = 'NOMPID'
-                    continue
-            try:
-                commission_rate = int(round(float(t['commissionAmount']['amount']) / float(t['saleAmount']['amount']), 2) * 100)
-            except ZeroDivisionError as e:
-                commission_rate = 0
-            if t['device'] == 'Desktop':
-                at_id = self.desktop_action_tracker_id
-            elif t['device'] == 'Mobile':
-                at_id = self.mobile_action_tracker_id
-
-            transaction = [
-                self.program_id,
-                at_id,
-                # '2020-05-03T23:59:59',
-                # 'NOW',
-                t['transactionDate'],
-                t['id'],
-                mpid,
-                t['status'],
-                t['saleAmount']['currency'],
-                t['saleAmount']['amount'],
-                'cat',
-                'sku',
-                1,
-                account_name,
-                account_name,
-                # t['voucherCode'],
-                t['customerCountry'],
-                t['customerCountry'],
-                t['advertiserCountry'],
-                t['transactionDate'],
-                account_name,
-                commission_rate
-                ]
-            t_list.append(transaction)
-        return headrow, t_list
-
-    def modified_transaction_lists(self, approved, declined):
-        """Transforms modified transaction records by adding the Impact tracker ID for the environment (desktop/mobile) and the Reason Code for the modification.
-        Updates the amount in the case of an approval and zeroes the amount in the case of a reversal.
-
-        Arguments:
-            approved {list} -- List of approved transactions (dictionaries)
-            declined {list} -- List of declined/reversed transactions (dictionaries)
-
-        Returns:
-            tuple -- Two items, the Impact modification file standard headers, and the amended list of transactions to be modifed
-        """        
-        headrow = ['ActionTrackerID','Oid','Amount','Reason']
-        t_list = []
-        for t in approved:
-            if t['device'] == 'Desktop':
-                at_id = self.desktop_action_tracker_id
-            elif t['device'] == 'Mobile':
-                at_id = self.mobile_action_tracker_id
-            transaction = [
-                at_id,
-                t['id'],
-                t['saleAmount']['amount'],
-                'VALIDATED_ORDER'
-                ]
-            t_list.append(transaction)
-        for t in declined:
-            if t['device'] == 'Desktop':
-                at_id = self.desktop_action_tracker_id
-            elif t['device'] == 'Mobile':
-                at_id = self.mobile_action_tracker_id
-            transaction = [
-                at_id,
-                t['id'],
-                0,
-                'RETURNED'
-                ]
-            t_list.append(transaction)
-
-        return headrow, t_list
-
-    def prepare_transactions(self, account_id, network, historical=False):
-        """Extract transactions from the network object methods (date formats are specific to each network) and pass them to the transformation functions
-        TODO :: move the date formatting to the network objects
-        TODO :: historical data functions
-
-        Arguments:
-            account_id {string} -- Network specific authentication token to get publisher list
-            network {object} -- Network object (currently one of AWin, Admitad, Linkshare)
-        Keyword Arguments:
-            historical {bool} -- Not currently implemented (default: {False})
-
-        Returns:
-            tuple -- (list of approved transactions, list of declined, list of pending, end datetime object) (all amended to fit Impact formatting requirements)
-        """
-        approved = []
-        pending = []
-        declined = []
-        logging.info(f'Getting {network.network_name} transactions and modifications for account {account_id}')
-        if network.network_name == 'Awin':
-            date_format = '%Y-%m-%d'
-            start = (datetime.now() - timedelta(1)).strftime(date_format)
-            end = (datetime.now() - timedelta(1)).strftime(date_format)
-        elif network.network_name == 'Linkshare':
-            date_format = '%Y-%m-%d'
-            start = (datetime.now() - timedelta(2)).strftime(date_format)
-            end = (datetime.now() - timedelta(1)).strftime(date_format)
-        elif network.network_name == 'Admitad':
-            date_format = '%d.%m.%Y'
-            start = (datetime.now() - timedelta(2)).strftime(date_format)
-            end = (datetime.now() - timedelta(1)).strftime(date_format)
-
-        # if historical:
-        #     start = (datetime.now() - timedelta(60)).strftime(date_format)
-        #     end = (datetime.now() - timedelta(31)).strftime(date_format)
-        #     for t in network.get_all_transactions(account_id, start, end, 'pending').json():
-        #         pending.append(t)
-        #     for t in network.get_all_transactions(account_id, start, end, 'approved').json():
-        #         approved.append(t)
-        #     for t in network.get_all_transactions(account_id, start, end, 'declined').json():
-        #         declined.append(t)
-
-        #     start = (datetime.now() - timedelta(30)).strftime(date_format)
-        #     end = (datetime.now() - timedelta(1)).strftime(date_format)
-        #     for t in network.get_all_transactions(account_id, start, end, 'pending').json():
-        #         pending.append(t)
-        if network.network_name == 'Linkshare':
-            approved, pending, declined = network.get_all_transactions(account_id, start, end)
-            declined = []
-
-        else:            
-            approved = network.get_all_transactions(account_id, start, end, 'approved')
-            declined = network.get_all_transactions(account_id, start, end, 'declined')
-            pending = network.get_all_transactions(account_id, start, end, 'pending')
-
-        return approved, declined, pending, (datetime.now() - timedelta(1)).strftime('%Y-%m-%d')
-
-    def transactions_process(self, account_id, account_name, network, historical=False):
-        """Main function running the extract and transform process for the network transaction data. Writes the results to CSV ready for upload.
-
-        Arguments:
-            account_id {string} -- Impact account ID
-            account_name {string} -- Network program/account name
-            network {object} -- Network object (currently one of AWin, Admitad, Linkshare)
-
-        Keyword Arguments:
-            historical {bool} -- Not implemented (default: {False})
-
-        Returns:
-            datetime -- End date
-        """        
-        approved, declined, pending, end = self.prepare_transactions(account_id, network, historical)
+    def batch_to_impact(self, file_path_m, file_path_p):
         try:
-            os.makedirs(f'transactions/{end}')
-        except OSError as e:
-            pass
-        logging.info(f'Approved transactions {len(approved)}')
-        logging.info(f'New pending transactions {len(pending)}')
-        logging.info(f'Declined transactions {len(declined)}')
+            with ftplib.FTP('batch.impactradius.com', self.ftp_un, self.ftp_p) as ftp, open(file_path_p, 'rb') as file:
+                ftp.storbinary(f'STOR {file_path_p.name}', file)                
+                logging.info(f'{file_path_p} transactions batch uploaded.')
+            os.remove(file_path_p)
 
-        headrow, t_list = self.new_transaction_lists(pending, account_name, network.network_name)
-        with open(f'transactions/{end}/{account_name}_{end}_pending.csv' , 'w', newline="") as f:
-            csvwriter = csv.writer(f, delimiter = ',')
-            csvwriter.writerow(headrow)
-            csvwriter.writerows(t_list)
+        except ftplib.error_perm as e:
+            logging.error(f"FTP Upload error for {file_path_p}. Re-upload this file in a few minutes.")
 
-        headrow, t_list = self.modified_transaction_lists(approved, declined)
-        with open(f'transactions/{end}/{account_name}_{end}_mods.csv' , 'w', newline="") as f:
-            csvwriter = csv.writer(f, delimiter = ',')
-            csvwriter.writerow(headrow)
-            csvwriter.writerows(t_list)
-        return end
-
-    def transactions_update(self, account_id, account_name, network, upload):
-        """Orchestration function for the ETL pipeline. Runs required functions then uploads to the Impact batch conversion/modification FTP server for the account
-
-        Arguments:
-            account_id {string} -- Impact account ID
-            account_name {string} -- Network program/account name
-            network {object} -- Network object (currently one of AWin, Admitad, Linkshare)
-
-        Keyword Arguments:
-            test {bool} -- If True, does not upload the resulting transaction files to Impact and leaves them in the local 'transactions' folder for review (default: {False})
-        """
-        awin_call = 0 # AWin rate limits to 20 calls per minute.
-        while awin_call > 17:
-            time.sleep(60)
-            awin_call = 0
-
-        end = self.transactions_process(account_id,account_name, network)
-        awin_call += 3
-
-        file_path_p = Path(f'transactions/{end}/{account_name}_{end}_pending.csv')
-        file_path_m = Path(f'transactions/{end}/{account_name}_{end}_mods.csv')
-
-        if upload:
-                try:
-                    with ftplib.FTP('batch.impactradius.com', self.ftp_un, self.ftp_p) as ftp, open(file_path_p, 'rb') as file:
-                        ftp.storbinary(f'STOR {file_path_p.name}', file)                
-                        logging.info(f'{account_name} {end} pending transactions batch uploaded.')
-                    os.remove(file_path_p)
-
-                except ftplib.error_perm as e:
-                    logging.error(f"FTP Upload error for {file_path_p}. Re-upload this file in a few minutes.")
-
-                try:
-                    with ftplib.FTP('batch.impactradius.com', self.ftp_un, self.ftp_p) as ftp, open(file_path_m, 'rb') as file:
-                        ftp.storbinary(f'STOR {file_path_m.name}', file)                   
-                        logging.info(f'{account_name} {end} modified transactions batch uploaded.')
-                    os.remove(file_path_m)
+        try:
+            with ftplib.FTP('batch.impactradius.com', self.ftp_un, self.ftp_p) as ftp, open(file_path_m, 'rb') as file:
+                ftp.storbinary(f'STOR {file_path_m.name}', file)                   
+                logging.info(f'{file_path_m} transactions batch uploaded.')
+            os.remove(file_path_m)
 
 
-                except ftplib.error_perm as e:
-                    logging.error(f"FTP Upload error for {file_path_m}. Re-upload this file in a few minutes.")
+        except ftplib.error_perm as e:
+            logging.error(f"FTP Upload error for {file_path_m}. Re-upload this file in a few minutes.")
 
     def get_all_transactions(self, acct, start=None, end=None, timeRange=None, status='pending'):
+        """GET all transactions over the given time period with a given status and transform
+        the transactions into dictionaries consumable by the Impact transaction upload object
+        TODO :: Add flexibility for the identifier of new vs returning and device type
+
+        Arguments:
+            acct {string} -- Impact program ID
+            start {datetime} -- Datetime object for the beginning of the transaction time period
+            end {datetime} -- Datetime object for the end of the transaction time period
+            status {string} -- Status of the transactions to be pulled - one of [pending, approved, declined]. Defaults to pending if incorrect input is given.
+
+        Returns:
+            list -- List of dictionaries containing transaction data
+        """       
         transactions = [] # Replace this with whatever network call needs to happen to get a pub list
         url = f'{self.adv_api_stem}Reports/adv_action_listing.json'
     

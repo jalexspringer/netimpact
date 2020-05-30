@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import netimpact.processor as P
 from netimpact.awin import AWin
 from netimpact.admitad import Admitad
 from netimpact.linkshare import Linkshare
@@ -7,7 +8,7 @@ from netimpact.impact import Impact #, Clicker
 import click
 import toml
 import logging,os,time
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 logging.basicConfig(level=os.environ.get("LOGLEVEL", "INFO"))
 
 @click.argument('networks')
@@ -15,9 +16,11 @@ logging.basicConfig(level=os.environ.get("LOGLEVEL", "INFO"))
 @click.option('--partners', '-p', is_flag=True, default=False, help='get and upload new partners?')
 @click.option('--transactions', '-t', is_flag=True, default=False, help='get and upload transactions?')
 @click.option('--groups', '-g', is_flag=True, default=False, help='refresh group list?')
-@click.option('--upload', is_flag=True, default=True, help='If flag is included then transactions will be pulled from the listed networks and put in the transactions folder locally instead of uploaded to Impact.')
+@click.option('--no_upload', is_flag=True, default=False, help='If flag is included then transactions will be pulled from the listed networks and put in the transactions folder locally instead of uploaded to Impact.')
+@click.option('--target_date', '-d', type=click.DateTime(formats=["%Y-%m-%d"]),
+              default=str(date.today()-timedelta(1)), help='Transactions from what day? Format: %Y-%m-%d')
 @click.command()
-def cli(networks,config,partners,transactions,groups,upload):
+def cli(networks,config,partners,transactions,groups,no_upload,target_date):
     """Default CLI method to get new partners and transactions from the
     provided NETWORKS and create them in the Impact program.
 
@@ -58,4 +61,8 @@ def cli(networks,config,partners,transactions,groups,upload):
             if partners:
                 i.new_publisher_validation(account_id, account_name, n)
             if transactions:
-                i.transactions_update(account_id, account_name, n, upload)
+                file_path_m, file_path_p = P.transactions_process(i, account_id, account_name, n, target_date)
+                if no_upload:
+                    pass
+                else:
+                    i.batch_to_impact(file_path_m, file_path_p)
