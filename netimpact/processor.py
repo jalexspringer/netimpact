@@ -17,7 +17,7 @@ def new_transaction_lists(impact, t_lists, account_name, network_name):
     Returns:
         tuple -- (list of Impact conversions upload headers, list of amended transaction dicts)
     """
-    headrow = ["CampaignId","ActionTrackerId","EventDate","OrderId","MediaPartnerId",'CustomerStatus',"CurrencyCode","Amount","Category","Sku","Quantity",'Text1','PromoCode','Country','OrderLocation','Text2','Date1','Note','Numeric1','OrderStatus','VoucherCode']
+    headrow = ["CampaignId","ActionTrackerId","EventDate","OrderId","MediaPartnerId",'CustomerStatus',"CurrencyCode","Amount","Category","Sku","Quantity",'Text1','PromoCode','Country','OrderLocation','Text2','Date1','Note','Numeric1','OrderStatus','VoucherCode','Modified']
     t_list = []
     for l in t_lists:
         for t in l:
@@ -61,7 +61,8 @@ def new_transaction_lists(impact, t_lists, account_name, network_name):
                 account_name,
                 commission_rate,
                 'pending',
-                t['voucherCode']
+                t['voucherCode'],
+                f'{datetime.now():%Y-%m-%dT%H:%M:%S}'
                 ]
             t_list.append(transaction)  
     return headrow, t_list
@@ -154,18 +155,21 @@ def transactions_process(impact, account_id, account_name, network, target_date)
 
     """        
     approved, declined, pending, end = prepare_transactions(impact, account_id, network, target_date)
-    pending_folders = f'transactions/{end.year}/{end:%m}/{end:%d}/{account_name.replace(" ","_")}'
-    mod_folders = f'modifications/{end.year}/{end:%m}/{end:%d}/{account_name.replace(" ","_")}'
+    transactions_filepath = f'transactions/{end.year}/{end:%m}/{end:%d}/{account_name.replace(" ","_")}'
+    modifications_filepath = f'modifications/{end.year}/{end:%m}/{end:%d}/{account_name.replace(" ","_")}'
 
     try:
-        os.makedirs(pending_folders)
-        os.makedirs(mod_folders)
-
-    except OSError as e:
+        os.makedirs(transactions_filepath)
+    except FileExistsError as e:
         pass
+    
+    try:
+        os.makedirs(modifications_filepath)
 
-    file_path_p = Path(f'{pending_folders}/{account_name.replace(" ","_")}_{end:%Y-%m-%d}.csv')
-    file_path_m = Path(f'{mod_folders}/{account_name.replace(" ","_")}_{end:%Y-%m-%d}.csv')
+    except FileExistsError as e:
+        pass
+    file_path_p = Path(f'{transactions_filepath}/{account_name.replace(" ","_")}_{end:%Y-%m-%d}.csv')
+    file_path_m = Path(f'{modifications_filepath}/{account_name.replace(" ","_")}_{end:%Y-%m-%d}.csv')
 
     logging.info(f'Approved transactions {len(approved)}')
     logging.info(f'New pending transactions {len(pending)}')
