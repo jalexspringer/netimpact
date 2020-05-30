@@ -76,9 +76,10 @@ def cli(networks,config,partners,transactions,groups,no_upload,s3_upload,target_
                         aws_access_key_id=c['S3']['access_key'],
                         aws_secret_access_key=c['S3']['secret_access_key'],
                     )
-                    s3 = boto3.resource('s3')
+                    s3 = session.resource('s3')
                     df = pd.read_csv(file_path_p)
                     pq_file = f'{str(file_path_p).rstrip(".csv")}.parquet'
                     df.to_parquet(pq_file)
                     s3.Object(c['S3']['bucket'], pq_file).put(Body=open(pq_file, 'rb'))
                     s3.Object(c['S3']['bucket'], str(file_path_m)).put(Body=open(str(file_path_m), 'rb'))
+                    logging.info("Files uploaded to {(c['S3']['bucket']}")
