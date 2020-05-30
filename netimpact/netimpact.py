@@ -78,7 +78,3 @@ def cli(networks,config,partners,transactions,groups,no_upload,s3_upload,target_
                     df.to_parquet(pq_file)
                     s3.Object(c['S3']['bucket'], pq_file).put(Body=open(pq_file, 'rb'))
                     s3.Object(c['S3']['bucket'], str(file_path_m)).put(Body=open(str(file_path_m), 'rb'))
-
-                    print(pq_file)
-                    print(str(file_path_m))
-                    print(s3_upload)
